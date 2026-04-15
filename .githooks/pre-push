@@ -1,0 +1,36 @@
+#!/bin/sh
+# Pre-push hook: refuse push if any commit is unsigned.
+# Install: git config core.hooksPath .githooks
+
+remote="$1"
+
+while read local_ref local_sha remote_ref remote_sha; do
+    # Skip delete pushes
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Determine range to check
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        # New branch — check all commits
+        range="$local_sha"
+    else
+        range="$remote_sha..$local_sha"
+    fi
+
+    # Check each commit for a valid GPG signature
+    unsigned=$(git log --format='%H %G?' $range | grep -v ' G$' | grep -v ' U$')
+    if [ -n "$unsigned" ]; then
+        echo "ERROR: Unsigned commits found. All commits must be GPG-signed."
+        echo ""
+        echo "Unsigned commits:"
+        echo "$unsigned" | while read hash status; do
+            echo "  $hash (signature: $status)"
+        done
+        echo ""
+        echo "Fix: just sign-commits"
+        exit 1
+    fi
+done
+
+exit 0
